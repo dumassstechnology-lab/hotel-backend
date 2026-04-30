@@ -16,12 +16,20 @@ const userSchema = new mongoose.Schema(
       required: true
     },
 
+    // ADMIN LOGIN
     email: {
       type: String,
-      required: true,
-      unique: true,
       lowercase: true,
-      index: true
+      index: true,
+      sparse: true, // allows null values
+      unique: true
+    },
+
+    // USER LOGIN
+    phone: {
+      type: String,
+      unique: true,
+      sparse: true
     },
 
     password: {
@@ -40,8 +48,6 @@ const userSchema = new mongoose.Schema(
       default: "user"
     },
 
-    // NEW FIELDS ↓↓↓
-
     profileImage: imageSchema,
 
     nationalId: {
@@ -59,5 +65,18 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// VALIDATION
+userSchema.pre("validate", function () {
+
+  if (this.role === "admin" && !this.email) {
+    throw new Error("Admin must have email");
+  }
+
+  if (this.role === "user" && !this.phone) {
+    throw new Error("User must have phone number");
+  }
+
+});
 
 export default mongoose.model("User", userSchema);

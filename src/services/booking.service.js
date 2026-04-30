@@ -204,11 +204,19 @@ export const createBookingService = async ({
     const totalPrice = nights * roomType.price * roomsBooked;
 
     // Prepare guest data
-    let guestData = guest || {};
-    if (userId) {
-      const user = await User.findById(userId);
-      if (user) guestData = { name: user.name, nationalIdImage: user.nationalId?.front?.url || "" };
-    }
+   let guestData = guest || {};
+
+if (userId) {
+  const user = await User.findById(userId);
+
+  if (user) {
+    guestData = {
+      name: user.name,
+      phone: user.phone,
+      nationalIdImage: user.nationalId?.front?.url || ""
+    };
+  }
+}
 
     // Create booking
     const [booking] = await Booking.create(
@@ -284,48 +292,49 @@ export const cancelBookingService = async (bookingId) => {
 /* ---------------------------
    Get bookings
 ---------------------------- */
-export const getBookingsService = async ({ hotelId, userId }) => {
-  const filter = {};
-  if (hotelId) filter.hotelId = hotelId;
-  if (userId) filter.userId = userId;
+  export const getBookingsService = async ({ hotelId, userId }) => {
+    const filter = {};
+    if (hotelId) filter.hotelId = hotelId;
+    if (userId) filter.userId = userId;
 
-  const bookings = await Booking.find(filter)
-    .populate("hotelId", "name city location star") // <- remove 'rooms'
-    .populate("userId", "name phone")               // optional
-    .sort({ createdAt: -1 });
+    const bookings = await Booking.find(filter)
+      .populate("hotelId", "name city location star") // <- remove 'rooms'
+      .populate("userId", "name phone")               // optional
+      .sort({ createdAt: -1 });
 
-  return bookings.map(b => {
-    // get room type name from the hotel's rooms array
-    const roomType = b.hotelId.rooms?.find(
-      r => r._id.toString() === b.roomTypeId.toString()
-    );
+    return bookings.map(b => {
+      // get room type name from the hotel's rooms array
+      const roomType = b.hotelId.rooms?.find(
+        r => r._id.toString() === b.roomTypeId.toString()
+      );
 
-    return {
-      _id: b._id,
-      guest: {
-        name: b.guest?.name,
-        nationalIdImage: b.guest?.nationalIdImage
-      },
-      hotel: {
-        _id: b.hotelId._id,
-        name: b.hotelId.name,
-        city: b.hotelId.city,
-        location: b.hotelId.location,
-        star: b.hotelId.star
-      },
-      roomTypeId: b.roomTypeId,
-      roomTypeName: roomType?.name || null,
-      assignedRooms: b.assignedRooms,
-      roomsBooked: b.roomsBooked,
-      checkInDate: b.checkInDate,
-      checkOutDate: b.checkOutDate,
-      status: b.status,
-      totalPrice: b.totalPrice,
-      source: b.source,
-      createdAt: b.createdAt
-    };
-  });
-};
+      return {
+        _id: b._id,
+        guest: {
+          name: b.guest?.name,
+          phone: b.guest?.phone,
+          nationalIdImage: b.guest?.nationalIdImage
+        },
+        hotel: {
+          _id: b.hotelId._id,
+          name: b.hotelId.name,
+          city: b.hotelId.city,
+          location: b.hotelId.location,
+          star: b.hotelId.star
+        },
+        roomTypeId: b.roomTypeId,
+        roomTypeName: roomType?.name || null,
+        assignedRooms: b.assignedRooms,
+        roomsBooked: b.roomsBooked,
+        checkInDate: b.checkInDate,
+        checkOutDate: b.checkOutDate,
+        status: b.status,
+        totalPrice: b.totalPrice,
+        source: b.source,
+        createdAt: b.createdAt
+      };
+    });
+  };
 
 /* ---------------------------
    Get availability for all room types

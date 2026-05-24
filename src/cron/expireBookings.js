@@ -76,7 +76,13 @@ export const expireBookings = async () => {
       await restoreAvailability(booking);
 
       booking.status = "expired";
-      await booking.save();
+
+// 🔥 auto delete after 12 hours
+booking.deleteAt = new Date(
+  Date.now() + 12 * 60 * 60 * 1000
+);
+
+await booking.save();
     }
 
     console.log(`🕒 Expired ${expiredBookings.length} booking(s)`);

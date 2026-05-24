@@ -19,6 +19,13 @@ const bookingSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: true
     },
+    roomTypeName: {
+      type: String
+    },
+
+    pricePerNight: {
+      type: Number
+    },
 
     // how many rooms booked
     roomsBooked: {
@@ -91,11 +98,37 @@ const bookingSchema = new mongoose.Schema(
   default: "pending",
   index: true
 },
+// when guest physically checks in
+checkedInAt: {
+  type: Date
+},
 
+// actual checkout timestamp
+actualCheckOut: {
+  type: Date
+},
+
+// whether stay was extended
+extended: {
+  type: Boolean,
+  default: false
+},
+
+// optional tracking
+extendedAt: {
+  type: Date
+},
     expiresAt: {
       type: Date,
       index: true
     },
+    deleteAt: {
+  type: Date,
+  default: null,
+  index: {
+    expires: 0
+  }
+},
 
     // guest info for reception/admin bookings
     guest: {

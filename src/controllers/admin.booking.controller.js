@@ -5,9 +5,71 @@ import {
   getAvailabilityService,
   checkInBookingService,
   checkOutBookingService,
-  getRoomGridService
+  getRoomGridService,
+  extendStayService
 } from "../services/booking.service.js";
+import User from "../models/user.js";
+/* -----------------------------
+   Create walk-in guest
+----------------------------- */
+export const createWalkInGuest =
+  async (req, res) => {
+    try {
+      const {
+        name,
+        phone,
+      } = req.body;
 
+      // check existing guest
+      let user =
+        await User.findOne({
+          phone,
+        });
+
+      // if guest already exists
+      if (user) {
+        return res.json(user);
+      }
+
+      // create guest
+      user =
+  await User.create({
+    name,
+    phone,
+
+    // temporary password
+    password:
+      Math.random()
+        .toString(36)
+        .slice(-8),
+
+    nationalId: {
+            front:
+              req.files?.idFront?.[0]
+                ? {
+                    url:
+                      req.files
+                        .idFront[0]
+                        .path,
+
+                    public_id:
+                      req.files
+                        .idFront[0]
+                        .filename,
+                  }
+                : {},
+          },
+        });
+
+      res.status(201).json(
+        user
+      );
+    } catch (err) {
+      res.status(500).json({
+        error: err.message,
+      });
+    }
+  };
 /* -----------------------------
    Create booking (admin)
 ----------------------------- */
@@ -114,5 +176,28 @@ export const getRoomGrid = async (req, res) => {
     res.json(rooms);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+/* -----------------------------
+   Extend stay (admin)
+----------------------------- */
+export const extendStayAdminBooking = async (
+  req,
+  res
+) => {
+  try {
+    const booking =
+      await extendStayService({
+        bookingId:
+          req.params.bookingId,
+        newCheckOutDate:
+          req.body.checkOutDate,
+      });
+
+    res.json(booking);
+  } catch (err) {
+    res.status(400).json({
+      error: err.message,
+    });
   }
 };

@@ -225,12 +225,18 @@ if (userId) {
           userId,
           hotelId,
           roomTypeId,
+          roomTypeName: roomType.name,
+          pricePerNight: roomType.price,
           roomsBooked,
           assignedRooms: selectedRooms, // store actual room numbers
           checkInDate,
           checkOutDate,
           totalPrice,
-          status: "pending",
+          status:
+  source === "admin" ||
+  source === "reception"
+    ? "confirmed"
+    : "pending",
           expiresAt: new Date(Date.now() + 15 * 60 * 1000),
           source,
           guest: guestData
@@ -298,42 +304,61 @@ export const cancelBookingService = async (bookingId) => {
     if (userId) filter.userId = userId;
 
     const bookings = await Booking.find(filter)
-      .populate("hotelId", "name city location star") // <- remove 'rooms'
-      .populate("userId", "name phone")               // optional
-      .sort({ createdAt: -1 });
+  .populate(
+    "hotelId",
+    "name city location star rooms"
+  )
+  .populate("userId", "name phone")
+  .sort({ createdAt: -1 });
 
-    return bookings.map(b => {
-      // get room type name from the hotel's rooms array
-      const roomType = b.hotelId.rooms?.find(
-        r => r._id.toString() === b.roomTypeId.toString()
-      );
+return bookings.map((b) => {
+  const roomType = b.hotelId.rooms?.find(
+    (r) =>
+      r._id.toString() ===
+      b.roomTypeId.toString()
+  );
 
-      return {
-        _id: b._id,
-        guest: {
-          name: b.guest?.name,
-          phone: b.guest?.phone,
-          nationalIdImage: b.guest?.nationalIdImage
-        },
-        hotel: {
-          _id: b.hotelId._id,
-          name: b.hotelId.name,
-          city: b.hotelId.city,
-          location: b.hotelId.location,
-          star: b.hotelId.star
-        },
-        roomTypeId: b.roomTypeId,
-        roomTypeName: roomType?.name || null,
-        assignedRooms: b.assignedRooms,
-        roomsBooked: b.roomsBooked,
-        checkInDate: b.checkInDate,
-        checkOutDate: b.checkOutDate,
-        status: b.status,
-        totalPrice: b.totalPrice,
-        source: b.source,
-        createdAt: b.createdAt
-      };
-    });
+  return {
+    _id: b._id,
+
+    guest: {
+      name: b.guest?.name,
+      phone: b.guest?.phone,
+      nationalIdImage:
+        b.guest?.nationalIdImage,
+    },
+
+    hotel: {
+      _id: b.hotelId._id,
+      name: b.hotelId.name,
+      city: b.hotelId.city,
+      location: b.hotelId.location,
+      star: b.hotelId.star,
+    },
+
+    roomTypeId: b.roomTypeId,
+
+    roomTypeName: roomType?.name || null,
+
+    roomPrice: roomType?.price || 0,
+
+    assignedRooms: b.assignedRooms,
+
+    roomsBooked: b.roomsBooked,
+
+    checkInDate: b.checkInDate,
+
+    checkOutDate: b.checkOutDate,
+
+    status: b.status,
+
+    totalPrice: b.totalPrice,
+
+    source: b.source,
+
+    createdAt: b.createdAt,
+  };
+});
   };
 
 /* ---------------------------
@@ -526,4 +551,113 @@ export const getRoomGridService = async ({ hotelId }) => {
   });
 
   return grid;
+};
+export const extendStayService = async ({
+  bookingId,
+  newCheckOutDate,
+}) => {
+  const session =
+    await mongoose.startSession();
+
+  session.startTransaction();
+
+  try {
+    const booking =
+      await Booking.findById(
+        bookingId
+      ).session(session);
+
+    if (!booking) {
+      throw new Error(
+        "Booking not found"
+      );
+    }
+
+    if (
+      booking.status !==
+      "checked_in"
+    ) {
+      throw new Error(
+        "Only checked-in bookings can be extended"
+      );
+    }
+
+    const currentCheckout =
+      new Date(
+        booking.checkOutDate
+      );
+
+    const newCheckout =
+      new Date(newCheckOutDate);
+
+    if (
+      newCheckout <= currentCheckout
+    ) {
+      throw new Error(
+        "New checkout must be later"
+      );
+    }
+
+    // CHECK AVAILABILITY
+    await checkAvailability({
+      hotelId: booking.hotelId,
+      roomTypeId:
+        booking.roomTypeId,
+      checkInDate:
+        currentCheckout,
+      checkOutDate:
+        newCheckout,
+      roomsRequested:
+        booking.roomsBooked,
+      assignedRooms:
+        booking.assignedRooms,
+    });
+
+    // RESERVE EXTRA DAYS
+    await updateAvailability(
+      booking.hotelId,
+      booking.roomTypeId,
+      currentCheckout,
+      newCheckout,
+      booking.assignedRooms,
+      "add",
+      session
+    );
+
+    // CALCULATE EXTRA PRICE
+    const extraNights =
+      (newCheckout -
+        currentCheckout) /
+      (1000 * 60 * 60 * 24);
+
+    const extraCost =
+      extraNights *
+      booking.pricePerNight *
+      booking.roomsBooked;
+
+    // UPDATE BOOKING
+    booking.totalPrice +=
+      extraCost;
+
+    booking.checkOutDate =
+      newCheckout;
+
+    booking.extended = true;
+
+    booking.extendedAt =
+      new Date();
+
+    await booking.save({
+      session,
+    });
+
+    await session.commitTransaction();
+
+    return booking;
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
 };

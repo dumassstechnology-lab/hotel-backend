@@ -120,3 +120,100 @@ export const aiHomeHotels = async (req, res) => {
     });
   }
 };
+export const filterHotelsmobile = async (req, res) => {
+  try {
+    const {
+      city,
+      star,
+      roomType,
+      minPrice,
+      maxPrice,
+      page = 1,
+      limit = 10,
+    } = req.body;
+
+    const filter = {};
+console.log(roomType);
+console.log(minPrice);
+console.log(maxPrice);
+    // city filter
+    if (city) {
+      filter.city = city;
+    }
+
+    // star rating
+    if (star) {
+      filter.star = Number(star);
+    }
+
+    // room-based filters (nested)
+    if (roomType || minPrice || maxPrice) {
+      filter.rooms = {
+        $elemMatch: {
+          ...(roomType && { name: roomType }),
+          ...((minPrice || maxPrice) && {
+            price: {
+              ...(minPrice && { $gte: Number(minPrice) }),
+              ...(maxPrice && { $lte: Number(maxPrice) }),
+            },
+          }),
+        },
+      };
+    }
+
+   const hotels = await Hotel.aggregate([
+  {
+    $match: {
+      ...(city && { city }),
+      ...(star && { star: Number(star) }),
+    },
+  },
+
+  {
+    $addFields: {
+      rooms: {
+        $filter: {
+          input: "$rooms",
+          as: "room",
+          cond: {
+            $and: [
+              ...(roomType ? [{ $eq: ["$$room.name", roomType] }] : []),
+              ...(minPrice ? [{ $gte: ["$$room.price", Number(minPrice)] }] : []),
+              ...(maxPrice ? [{ $lte: ["$$room.price", Number(maxPrice)] }] : []),
+            ],
+          },
+        },
+      },
+    },
+  },
+
+  // ❗ Remove hotels with no matching rooms
+  {
+    $match: {
+      "rooms.0": { $exists: true },
+    },
+  },
+
+  { $sort: { createdAt: -1 } },
+  { $skip: (page - 1) * limit },
+  { $limit: Number(limit) },
+]);
+console.log(hotels);
+    const total = await Hotel.countDocuments(filter);
+console.log(total)
+    res.status(200).json({
+      success: true,
+      total,
+      page,
+      hotels,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to filter hotels",
+      error: error.message,
+    });
+  }
+};
+
+
